@@ -22,7 +22,7 @@ impl<'a> DirectoryFilesProvider<'a> {
     }
 }
 
-impl<'a> FilesProvider for DirectoryFilesProvider<'a> {
+impl FilesProvider for DirectoryFilesProvider<'_> {
     fn get_file_contents(&self, filename: &str) -> Result<String, Whatever> {
         let file = self.base_dir.join(filename);
         std::fs::read_to_string(file)

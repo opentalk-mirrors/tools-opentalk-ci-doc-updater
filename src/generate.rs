@@ -26,7 +26,7 @@ impl FilesProvider for DirectoryFilesProvider<'_> {
     fn get_file_contents(&self, filename: &str) -> Result<String, Whatever> {
         let file = self.base_dir.join(filename);
         std::fs::read_to_string(file)
-            .with_whatever_context(|err| format!("Couldn't write file {}: {}", filename, err))
+            .with_whatever_context(|err| format!("Couldn't write file {filename}: {err}"))
     }
 }
 

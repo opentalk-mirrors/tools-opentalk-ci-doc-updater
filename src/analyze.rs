@@ -179,7 +179,7 @@ world
  <!-- end:fromfile:opentalk-controller-help -->
 
 The end.";
-        println!("{}", text);
+        println!("{text}");
 
         let captures = RE.captures_iter(text).collect::<Vec<_>>();
 

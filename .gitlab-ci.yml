@@ -3,7 +3,11 @@
 # SPDX-License-Identifier: EUPL-1.2
 
 ---
-image: git.opentalk.dev:5050/opentalk/backend/containers/rust:1.97.1-trixie
+image: registry.heinlein.group/opentalk-tools/rust:1.97-trixie
+
+.template_vars:
+  FLAVORS: ['']
+  DEFAULT_FLAVOR: ''
 
 .default_job_condition: &default_job_condition
   needs: []
@@ -18,74 +22,29 @@ stages:
   - lint
   - test
   - release
+  - package
+  - build
+  - push
 
-lint:fmt:
-  stage: lint
-  <<: *default_job_condition
-  script:
-    - cargo +nightly fmt -- --check
-
-lint:clippy:
-  stage: lint
-  <<: *default_job_condition
-  script: cargo clippy --workspace --all-features --tests -- --deny warnings
-
-lint:doc:
-  stage: lint
-  <<: *default_job_condition
-  variables:
-    RUSTDOCFLAGS: -Dwarnings
-  script: cargo doc --workspace --no-deps
-
-lint:dependency_check:
-  stage: lint
-  needs: []
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-      changes:
-        - Cargo.lock
-        - deny.toml
-    - if: $CI_PIPELINE_SOURCE == 'schedule'
-  script: cargo-deny --workspace check --deny unmatched-skip --deny license-not-encountered
-
-lint:unnecessary_dependencies:
-  stage: lint
-  needs: []
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-  before_script: if ! cargo machete --version; then cargo install cargo-machete; fi
-  script: cargo machete --with-metadata
-
-lint:yaml:
-  stage: lint
-  <<: *default_job_condition
-  before_script:
-    - apt-get update && apt-get install -y yamllint
-  script: yamllint .
-
-lint:markdown:
-  stage: lint
-  <<: *default_job_condition
-  image: registry.gitlab.com/pipeline-components/markdownlint:latest
-  script:
-    - mdl --style .markdown_style.rb  --warnings .
-
-lint:licensing:
-  stage: lint
-  <<: *default_job_condition
-  image:
-    name: fsfe/reuse:latest
-    entrypoint: ['']
-  script:
-    - reuse lint
-
-lint:shellcheck:
-  stage: lint
-  <<: *default_job_condition
-  before_script:
-    - apt-get update && apt-get install -y shellcheck
-  script:
-    - git ls-files --exclude='*.sh' --ignored -c -z | xargs -0r shellcheck
+include:
+  - project: opentalk/ci/templates/collect-commit-evidence
+    ref: v2
+    file: .gitlab-ci-template.yml
+  - project: opentalk/ci/templates/rust-lint
+    ref: v1
+    file: .gitlab-ci-template.yml
+  - project: opentalk/ci/templates/common-lint
+    ref: v1
+    file: .gitlab-ci-template.yml
+  - project: opentalk/ci/templates/changelog
+    ref: v2
+    file: .gitlab-ci-template.yml
+  - project: opentalk/ci/templates/rust-container-build
+    inputs:
+      harbor_namespace_suffix: ci-doc-updater
+      harbor_push_project: opentalk/opentalk-devops/push-and-sign-images-for-the-opentalk-tools-namespace
+    ref: v2
+    file: .gitlab-ci-template.yml
 
 test:cargo_test:
   stage: test
@@ -165,26 +124,10 @@ build:
   script:
     - cargo auditable build --release --locked --workspace
 
-package:container:
+package:container-build-mr:
   needs:
     - build
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_TAG != null
-  image:
-    name: gcr.io/kaniko-project/executor:debug
-    entrypoint: ['']
-  script:
-    - mkdir -p /kaniko/.docker
-    - >
-      echo
-      "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(echo -n ${CI_REGISTRY_USER}:${CI_REGISTRY_PASSWORD} | base64)\"}}}" >
-      /kaniko/.docker/config.json
-    - >
-      /kaniko/executor --registry-mirror=mirror.gcr.io --context $CI_PROJECT_DIR
-      --dockerfile $CI_PROJECT_DIR/ci/Dockerfile --destination $CI_REGISTRY_IMAGE:dev --force
-    - >
-      if [ "$CI_COMMIT_TAG" != "" ]; then /kaniko/executor --registry-mirror=mirror.gcr.io --context $CI_PROJECT_DIR
-      --dockerfile $CI_PROJECT_DIR/ci/Dockerfile --destination $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG --force; fi
+
+package:container-build:
+  needs:
+    - build

@@ -6,8 +6,8 @@
 image: registry.heinlein.group/opentalk-tools/rust:1.97-trixie
 
 .template_vars:
-  FLAVORS: ['']
-  DEFAULT_FLAVOR: ''
+  FLAVORS: [trixie]
+  DEFAULT_FLAVOR: trixie
 
 .default_job_condition: &default_job_condition
   needs: []
